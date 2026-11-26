@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": 3,
+  "revision": 4,
   "profile": {
     "chapter": "1",
     "horse": "",
@@ -13,20 +13,7 @@
     "next": ""
   },
   "checks": {},
-  "journal": [
-    {
-      "title": "test2",
-      "date": "2026-11-26",
-      "category": "General",
-      "chapter": "1",
-      "region": "",
-      "weather": "",
-      "text": "test2",
-      "next": "",
-      "id": "c5119171-1db8-490b-bcb3-1de01f6e10ea",
-      "updated": "2026-11-26T08:25:53.508Z"
-    }
-  ],
+  "journal": [],
   "notes": [],
   "tasks": [],
   "photos": [],
