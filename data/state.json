@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "revision": 0,
+  "profile": {
+    "chapter": "1",
+    "horse": "",
+    "breed": "",
+    "cash": "",
+    "honor": "Not recorded",
+    "base": "",
+    "protectedSave": "",
+    "activeSave": "",
+    "next": ""
+  },
+  "checks": {},
+  "journal": [],
+  "notes": [],
+  "tasks": [],
+  "photos": [],
+  "settings": {
+    "spoilerSafe": true
+  }
+}

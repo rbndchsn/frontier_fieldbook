@@ -1,0 +1,1 @@
+Public shared state: state.json is intentionally tracked. All its revisions are public. The GitHub Pages editor updates it through the authenticated GitHub Contents API. Do not commit tokens or secrets. Export backups before replacing it.
