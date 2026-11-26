@@ -3,17 +3,21 @@
 window.GitSync=(()=>{
   const REPO='rbndchsn/frontier_fieldbook', BRANCH='main', PATH='data/state.json', MAX=900000;
   const API='https://api.github.com/repos/'+REPO+'/contents/'+PATH;
-  let token=null, sha=null, working=false;
+  let token=null, sha=null, working=false, writeVerified=false;
   const elem=id=>document.getElementById(id);
   async function request(method='GET',body,credential=token){
     const headers={Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};
     if(credential)headers.Authorization='Bearer '+credential;
     if(body)headers['Content-Type']='application/json';
-    const r=await fetch(API+(method==='GET'?'?ref='+BRANCH:''),{method,headers,cache:'no-store',redirect:'error',...(body?{body:JSON.stringify(body)}:{})});
+    let r;try{r=await fetch(API+(method==='GET'?'?ref='+BRANCH:''),{method,headers,cache:'no-store',redirect:'error',...(body?{body:JSON.stringify(body)}:{})});}catch(e){throw Error('Network/browser error during GitHub '+method+': '+e.message+'. Check your connection or browser network restrictions.');}
     let out;try{out=await r.json()}catch{throw Error('GitHub returned an unreadable response ('+r.status+').')}
     if(!r.ok){
-      if(r.status===409||r.status===422)throw Error('GitHub rejected an outdated or invalid write. Your changes were not committed. Reload the latest public state and reapply the edit.');
-      throw Error('GitHub '+r.status+': '+(out.message||'Request failed'));
+      const detail='GitHub '+method+' '+r.status+': '+(out.message||'Request failed');
+      if(r.status===401)throw Error(detail+'. Reconnect using a valid token.');
+      if(method==='PUT'&&(r.status===403||r.status===404))throw Error(detail+'. Check that your fine-grained token selects frontier_fieldbook and grants Repository permissions > Contents: Read and write. Public read access does not prove write access. Branch protection or rate limits can also reject a write.');
+      if(r.status===409)throw Error(detail+'. Another revision may have been published. Refresh published data before retrying.');
+      if(r.status===422)throw Error(detail+(Array.isArray(out.errors)?' '+out.errors.map(x=>x.message||x.code||'').join('; '):'')+'. Check the reported validation error.');
+      throw Error(detail);
     }return out;
   }
   function validate(s){
@@ -55,17 +59,17 @@ window.GitSync=(()=>{
     if(!/^github_pat_[A-Za-z0-9_]+$/.test(candidate))throw Error('Use a fine-grained personal access token (github_pat_…).');
     if(!elem('git-public').checked||!confirm('All journal entries, photos, progress and edits will be PUBLIC, and Git history retains previous versions. Enable editing?'))throw Error('Public editing not enabled.');
     const r=await request('GET',null,candidate),s=decode(r);
-    token=candidate;sha=r.sha;state=s;connection(true);render();flash('Editor connected. Your next successful save will create a public commit.');
+    token=candidate;sha=r.sha;state=s;writeVerified=false;lastSaveError='';connection(true);render();flash('Connected: read access confirmed. The first save will test write permission.');
   }
   async function save(next){
     if(!token||!sha)throw Error('Connect as editor under Character & backups before saving. Public readers cannot write.');
     const s=validate({...next,revision:state.revision+1});
     const out=await request('PUT',{message:'Fieldbook: save revision '+s.revision,content:encode(s),branch:BRANCH,sha});
     if(!out?.content?.sha||!out?.commit?.sha)throw Error('GitHub did not confirm the save. Reload and check the published state.');
-    sha=out.content.sha;return s;
+    sha=out.content.sha;writeVerified=true;return s;
   }
   function panel(){
-    if(token)return '<div class="card" style="margin-top:18px"><div class="eyebrow">PUBLIC · VERSION CONTROLLED</div><h2>GitHub editor connected</h2><p>Each dashboard save creates a commit in <strong>'+REPO+'</strong>. Journal, notes, photos and progress are public. Your token remains in this page’s memory only.</p><p class="caption">900 KB total JSON limit · Revision '+esc(sha?.slice(0,12)||'unknown')+'</p><div class="actions"><button class="primary" data-git-action="reload">Refresh published data</button><button class="ghost" data-git-action="disconnect">Disconnect editor</button><a href="https://github.com/rbndchsn/frontier_fieldbook/commits/main/data/state.json" target="_blank" rel="noopener noreferrer">View commit history</a></div></div>';
+    if(token)return '<div class="card" style="margin-top:18px"><div class="eyebrow">PUBLIC · VERSION CONTROLLED</div><h2>GitHub editor connected</h2><p class="caption">'+(writeVerified?'Read and write verified in this session.':'Read access verified; write permission has not yet been tested.')+'</p><p>Each dashboard save creates a commit in <strong>'+REPO+'</strong>. Journal, notes, photos and progress are public. Your token remains in this page’s memory only.</p><p class="caption">900 KB total JSON limit · Revision '+esc(sha?.slice(0,12)||'unknown')+'</p><div class="actions"><button class="primary" data-git-action="reload">Refresh published data</button><button class="ghost" data-git-action="disconnect">Disconnect editor</button><a href="https://github.com/rbndchsn/frontier_fieldbook/commits/main/data/state.json" target="_blank" rel="noopener noreferrer">View commit history</a></div></div>';
     return '<div class="card" style="margin-top:18px"><div class="eyebrow">PUBLIC · READ ONLY UNTIL CONNECTED</div><h2>GitHub editor access</h2><p>Everyone can read the published journal. Only someone with repository write permission can save changes.</p><label class="field">Fine-grained GitHub personal access token<input id="git-token" type="password" autocomplete="off" placeholder="github_pat_…"></label><p class="caption">Select only frontier_fieldbook and grant Contents: Read and write. Use a short expiration. Never share or commit your token. Reconnect after a page reload.</p><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="git-public"> I understand that all dashboard content is public and recorded in Git history.</label><div class="actions" style="margin-top:12px"><button class="primary" data-git-action="connect">Connect editor</button><button class="ghost" data-git-action="reload">Refresh published data</button><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Create token</a></div></div>';
   }
   document.addEventListener('click',async e=>{
@@ -74,7 +78,7 @@ window.GitSync=(()=>{
     try{
       if(b.dataset.gitAction==='connect')await connect();
       else{
-        if(b.dataset.gitAction==='disconnect'){token=null;sha=null;}
+        if(b.dataset.gitAction==='disconnect'){token=null;sha=null;writeVerified=false;}
         state=await load();connection(true);render();flash(token?'Latest published revision loaded.':'Public read-only view.');
       }
     }catch(e){flash(e.message,true)}finally{busy=false;working=false;b.disabled=false}
